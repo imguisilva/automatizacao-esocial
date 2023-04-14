@@ -1,0 +1,8 @@
+.venv
+cnpj.xlsx
+dist
+credentials.json
+token.json
+*.manifest
+*.spec
+
