@@ -1,5 +1,6 @@
 from __future__ import print_function
 
+import pyscreeze
 import psutil
 import os
 import os.path
@@ -8,6 +9,7 @@ import numpy as np
 import sys
 from datetime import date
 import datetime
+from time import sleep
 import pyautogui
 import pywinauto, time
 import pandas as pd
@@ -188,17 +190,14 @@ def startParametrizacao():
                 window.child_window(title="S-1210 - Pagamentos", class_name="Button").wait('exists', timeout=15, retry_interval=1).click_input(coords=(100,10, 1366,768))
 
                 window.child_window(title="En&viar", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
-
-                try:
-                    # Espera 180seg até que a janela com o titulo de Atenção fique visível
-                    app.window(title_re = 'Atenção').wait('visible', timeout=180, retry_interval=1)
-                except:
-                    pass
+            
+                window.child_window(title="En&viar").wait('exists', timeout=500, retry_interval=2) #Espera o "Eventos Periodicos ficar disponivel dnv"
+                #print("existe o enviar")
 
                 dlg = app.window(title_re='Atenção')
 
                 recisoes = dlg.child_window(title_re='Existem rescisões calculadas que não foram enviadas ao eSocial e se enviadas não será gerado de forma automática o evento de pagamento para o eSocial. Deseja enviar as rescisões agora?', class_name='Static')
-
+                
                 #A competência está fechada!
                 comp_fechada = dlg.child_window(title_re='A competência informada está fechada no eSocial. Para envio de eventos nesta competência é necessário reabri-la.', class_name='Edit')
                 
@@ -209,436 +208,499 @@ def startParametrizacao():
                 #Eventos periódicos enviados com sucesso!
                 enviado_sucesso = dlg.child_window(title_re='Eventos periódicos enviados com sucesso!', class_name='Static')
                 
-                try:
-                    if recisoes.exists():
+                aviso_rubricas = app.window(title="Avisos Rubricas")
+                
+                if recisoes.exists():
+                    try:
+                        time.sleep(1)
                         dlg.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
+                        dlg.child_window(title_re='Eventos periódicos enviados com sucesso!', class_name='Static').wait('visible', timeout=180)
+                    except:
+                        pass
+
+                if aviso_rubricas.exists():
+                    time.sleep(1)
+                    aviso_rubricas.child_window(title="&Sim", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
+                    window.child_window(title="&Painel Pendências", class_name="Button").wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
+                    window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
+                    
+                    #Definindo o temporizador
+                    segundos = 60
+                    intervalo = 1
+
+                    while not pyautogui.locateOnScreen('imagens/Rubrica.png', region=(0,0, 1366,768)): # se Rubrica existir, faça:
                         try:
-                            app.window(title_re = 'Avisos Rubricas').wait('visible', timeout=180)
-                            aviso_rubricas = app.window(title_re = 'Avisos Rubricas')
-                            if aviso_rubricas.exists():
-                                aviso_rubricas.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
-                            try:
-                                app.window(title_re = 'Avisos Rubricas').wait('visible', timeout=60)
-                                aviso_rubricas = app.window(title_re = 'Avisos Rubricas')
-                                if aviso_rubricas.exists():
-                                    aviso_rubricas.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                    window.child_window(title="&Painel Pendências", class_name="Button").wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
-                                    #SE FOR ENCONTRADO ERROS NA ABA "INVALIDADOS" E/OU "ERROS LOTE", verifique qual será o procedimento adotado (pular para a próxima empresa ou reenviar)
-                            except:
-                                pass
+                            print("NÃO EXISTE, CLICANDO NOVAMENTE...")
+                            window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
+
+                            #Temporizador
+                            if segundos>0:
+                                print(segundos)
+                                segundos-=intervalo
+                                sleep(intervalo)
+                            if segundos == 0:
+                                print('Finalizado')
+                                break
+                            elif segundos < 0:
+                                print('Finalizado')
+                                break
+
                         except:
+                            #print("AGORA EXISTE, SAINDO...")
                             pass
-                except:
-                    pass
 
+                    while pyautogui.locateOnScreen('imagens/Rubrica.png', region=(0,0, 1366,768)): # se Rubrica existir, faça:
+                        try:
+                            #print("TEM RUBRICA")
+                            window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
+                            time.sleep(1)
+                        except:
+                            #print("NÃO TEM MAIS RUBRICA")
+                            pass
 
-                #Verificando se há rubricas
-                try:
-                    app.window(title_re = 'Avisos Rubricas').wait('visible')
-                    aviso_rubricas = app.window(title_re = 'Avisos Rubricas', class_name="FNWNS3190")
-                    if aviso_rubricas.exists():
-                        aviso_rubricas.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
-                except:
-                    pass
+                    else:
+                        # 	3 - quando não tiver mais nada na aba "Em Processamento", podemos dar continuidade (em caso de erro, o mesmo deve ser excluído e enviado de novo até ser enviado)
+                        window.child_window(title="Fe&char",class_name="Button").click_input(coords=(0,0, 1366,768)) #procurar o botao fechar
+                        window.child_window(title="En&viar", class_name="Button").click_input(coords=(0,0, 1366,768))
+                        window.child_window(title="En&viar").wait('exists', timeout=500, retry_interval=2)
+                        #print("existe o enviar 2")
 
-                if not nao_calculo.exists(): #não existem calculos
-                    if not nao_pagamentos.exists():
-                        if not comp_fechada.exists(): #A competência está fechada
-                            if enviado_sucesso.exists(): #enviado com sucesso
-                                time.sleep(2)
-                                dlg.child_window(title="OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
-                            
-                                #3 - acompanhar o envio no "Painel de Pendências"
-                                window.child_window(title="&Painel Pendências", class_name="Button").wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
-
-                                #Clicar na aba "Em Processamento"
-                                window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
-
-                                    # 	1 - caso o a coluna "Evento" estiver escrito "Rubricas", o procedimento de envio deve ser feito duas vezes (pois posteriormente será enviado os "Pagamentos" e "Remuneração")
-
-                                rubrica = pyautogui.locateOnScreen('imagens/Rubrica.png', region=(0,0, 1366,768))
-
-                                if rubrica:
-                                    while pyautogui.locateOnScreen('imagens/Rubrica.png', region=(0,0, 1366,768)): # se Rubrica existir, faça:
-                                        # 	2 - clicar em "Atualizar" para verificar se já foram enviadas
-                                        try:
-                                            window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
-                                        except:
-                                            pass
-                                        time.sleep(1.5)
-                                    else: # quando não existir mais, faça:
-                                        # 	3 - quando não tiver mais nada na aba "Em Processamento", podemos dar continuidade (em caso de erro, o mesmo deve ser excluído e enviado de novo até ser enviado)
-                                        window.child_window(title="Fe&char",class_name="Button").click_input(coords=(0,0, 1366,768)) #procurar o botao fechar
-                                        window.child_window(title="En&viar", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                        enviado_sucesso.child_window(title="OK", class_name="Button", found_index=0).wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
-                                        pywinauto.keyboard.send_keys('{ENTER}')
-                                        window.child_window(title="&Painel Pendências", class_name="Button").wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
-                                        window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
-                                        
-                                        #  4 - Para verificar se os eventos foram validados, ir no "Painel de Pendências" -> Em Processamento e aguardar ser enviado. Depois ir em Validados -> Periódicos e filtrar pela competência
-
-                                while pyautogui.locateOnScreen('imagens/S-1200.png', region=(0,0, 1366,768)) or pyautogui.locateOnScreen('imagens/S-1210.png', region=(0,0, 1366,768)):
-                                    try:
-                                        window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
-                                    except:
-                                        pass
-                                    time.sleep(1)
-                                else:
-                                    window.child_window(title="&Fechar", class_name="Button")
-
-                                pywinauto.keyboard.send_keys('{ESC}')
-                                pywinauto.keyboard.send_keys('{ESC}')
-                                pywinauto.keyboard.send_keys('{ESC}')
-                                time.sleep(0.5)
-
-                                # 3 - Depois de enviado, ir em "Relatórios" -> "Demonstrativo de INSS Folha..."
-                                    # 	1 - Ok
-                                    # 	2 - Checar se a coluna "Situação" está com o status de "Enviado"
-                                    # 	3 - Checar se as colunas "Base de Cálculo" e "Valor INSS" da tabela "Valor INSS Sistema" coincidem com os valores da tabela "Valor INSS eSocial".
-                                    # 	4 - Esc
-                                    # 	5 - Esc
-
-                                # TOOLBAR DO BOTÃO DE RELATÓRIOS
-                                window2.child_window(title="Relatórios", control_type="MenuItem").click_input(coords=(0,0, 1366,768))
-                                window2.child_window(title="e-Social", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
-                                window2.child_window(title="Demonstrativo de INSS Folha e INSS eSocial", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
-                                window.child_window(title="Competência:", class_name="Button", found_index=0).wait('visible', timeout=20).click_input(coords=(150,10, 1366,768))
-                                pyautogui.hotkey('ctrl','v')
-                                time.sleep(0.5)
-                                window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(250,10, 1366,768))
-                                pyautogui.hotkey('ctrl','v')
-                                window.child_window(title="&OK", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
-                                window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=30).click_input(coords=(0,0, 1366,768))
-
-                                #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
-                                app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=30, retry_interval=1)
-
-                                salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
-
-                                if salvar_relatorio.exists():
-                                    salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
-                                    pywinauto.keyboard.send_keys('{DOWN}')
-                                    pywinauto.keyboard.send_keys('{ENTER}')
-                                    salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                window2.child_window(title="Área de Trabalho", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-                                window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-                                pyautogui.write("Dados INSS")
-                                window2.child_window(title="Salvar", auto_id="1", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-
-                                window = app.top_window()
-                                window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                # ----- Verificação se os dados conferem através da planilha
-
-                                data_atual = date.today()
-                                month, year = (data_atual.month-1, data_atual.year) if data_atual.month != 1 else (12, data_atual.year-1)
-                                data_atual = data_atual.replace(day=1, month=month, year=year)
-                                competencia = data_atual.strftime('%d/%m/%Y')
-
-                                tabela = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\Dados INSS.xls", engine='xlrd')
-
-                                #SISTEMA
-                                sistema_base = tabela.loc[tabela["competencia"]==competencia,"base_inss"]
-                                sistema_val = tabela.loc[tabela["competencia"]==competencia,"valor_inss"]
-
-
-                                # ------ ESOCIAL
-                                esocial_base = tabela.loc[tabela["competencia"]==competencia, "cp_base_inss_esocial"]
-                                esocial_val = tabela.loc[tabela["competencia"]==competencia, "cp_valor_calculado_inss_esocial"]
-
-                                # ------ COMPARAÇÃO
-                                base = (np.array_equal(sistema_base, esocial_base)) #compara se os dois arrays são iguais (base calculo sistema, base calculo esocial)
-                                valor = (np.array_equal(sistema_val, esocial_val)) # valor inss (sistema), valor calculado inss (inss)
+                if not aviso_rubricas.exists():
+                    if not nao_calculo.exists(): #não existem calculos
+                        if not nao_pagamentos.exists():
+                            if not comp_fechada.exists(): #A competência está fechada
+                                if enviado_sucesso.exists(): #enviado com sucesso
+                                    time.sleep(2)
+                                    dlg.child_window(title="OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
                                 
-                                if base and valor:
-                                    pyautogui.alert(text=f'Conferência realizada, os valores do INSS da Empresa {cod} coincidem. ', title='Automatização eSocial', button='OK', timeout="15000")
-                                    window = app.FNWND3190
-                                    window.set_focus()
-                                    time.sleep(3)
-                                    pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
-                                    pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
-                            
-                                    window2.child_window(title="Relatórios", control_type="MenuItem").click_input(coords=(0,0, 1366,768))
-                                    window2.child_window(title="e-Social", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
-                                    window2.child_window(title="Demonstrativo de FGTS Folha e FGTS eSocial", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+                                    #3 - acompanhar o envio no "Painel de Pendências"
+                                    window.child_window(title="&Painel Pendências", class_name="Button").wait('visible', timeout=30).click_input(coords=(0,0, 1366,768))
+                                    time.sleep(1)
 
-                                    window = app.top_window()
-                                    window.child_window(title="Competência:", class_name="Button", found_index=0).wait('visible', timeout=20).click_input(coords=(150,10, 1366,768))
-                                    pc.copy(data2)
-                                    pyautogui.hotkey('ctrl','v')
-                                    time.sleep(0.5)
-                                    window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(250,10, 1366,768))
-                                    pyautogui.hotkey('ctrl','v')
-                                    window.child_window(title="&OK", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                    invalidados = pyautogui.locateOnScreen('imagens/invalidados.png', region=(0,0, 1366,768))
+                                    if not invalidados:
 
-                                    # ------ Verificar se os dados conferem através da planilha
+                                        #Clicar na aba "Em Processamento"
+                                        window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
+                                        window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
+                                        
+                                        #Definindo o temporizador
+                                        segundos = 60
+                                        intervalo = 1
 
-                                    # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
-                                    window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=30).click_input(coords=(0,0, 1366,768))
+                                        while not pyautogui.locateOnScreen('imagens/S-1200.png', region=(0,0, 1366,768)) or pyautogui.locateOnScreen('imagens/S-1210.png', region=(0,0, 1366,768)):
+                                            try:
+                                                window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
+                                                print("nao tem pagamentos")
 
-                                    #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
-                                    app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=30, retry_interval=1)
+                                                #Temporizador
+                                                if segundos>0:
+                                                    print(segundos)
+                                                    segundos-=intervalo
+                                                    sleep(intervalo)
+                                                if segundos == 0:
+                                                    print('Finalizado')
+                                                    break
+                                                elif segundos < 0:
+                                                    print('Finalizado')
+                                                    break
 
-                                    salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
+                                            except:
+                                                pass
 
-                                    if salvar_relatorio.exists():
-                                        salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
-                                        pywinauto.keyboard.send_keys('{DOWN}')
-                                        pywinauto.keyboard.send_keys('{ENTER}')
-                                        salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                    window2.child_window(title="Área de Trabalho", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-                                    window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-                                    pyautogui.write("Dados FGTS")
-                                    window2.child_window(title="Salvar", auto_id="1", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
-                                    
-                                    window = app.top_window()
-                                    window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                    # verificação se os dados conferem através da planilha
-
-                                    tabela_2 = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\Dados FGTS.xls", engine='xlrd') 
-                                    #C:\\Users\\Suporte\\Desktop\\
-
-                                    # SE A BASE_FGTS_DO_SISTEMA - BASE_DO_ESOCIAL FOR MENOR OU IGUAL A 20 CENTAVOS
-                                    calculo_fgts = (tabela_2.loc[tabela_2["competencia"]==competencia,"base_fgts"]-tabela_2.loc[tabela_2["competencia"]==competencia, "cp_base_fgts_esocial"])*(-1) <= 0.20
-                                    resultado_base = calculo_fgts.all()
-                                    # A FUNÇÃO .all() testa se todos os resultados são TRUE
-
-                                    calculo_valor = (tabela_2.loc[tabela_2["competencia"]==competencia, "valor_fgts"]-tabela_2.loc[tabela_2["competencia"]==competencia,"cp_valor_fgts_esocial"])*(-1) <= 0.20
-                                    resultado_valor = calculo_valor.all()
-
-                                    if resultado_base and resultado_valor:
-                                        #print("Ok, a diferença é menor que 0.20, pode continuar!!!!")
-                                        pyautogui.alert(text=f'Conferência realizada com sucesso!', title='Automatização eSocial', button='OK', timeout="15000")
-                                        window = app.FNWND3190
-                                        window.set_focus()
-                                        time.sleep(3)
-                                        pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
-                                        pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
-                                        # 5 - "Rotina" -> "Eventos Periódicos"
+                                        while pyautogui.locateOnScreen('imagens/S-1200.png', region=(0,0, 1366,768)) or pyautogui.locateOnScreen('imagens/S-1210.png', region=(0,0, 1366,768)):
+                                            try:
+                                                window.child_window(title="&Atualizar", class_name="Button", found_index=0).double_click_input(coords=(0,0, 1366,768))
+                                                print("tem pagamentos")
+                                                time.sleep(1)
+                                            except:
+                                                pass
                                             
+                                        else:
+                                            window.child_window(title="&Fechar", class_name="Button")
+
+                                        pywinauto.keyboard.send_keys('{ESC}')
+                                        pywinauto.keyboard.send_keys('{ESC}')
+                                        pywinauto.keyboard.send_keys('{ESC}')
+                                        time.sleep(0.5)
+
+                                        # 3 - Depois de enviado, ir em "Relatórios" -> "Demonstrativo de INSS Folha..."
+                                            # 	1 - Ok
+                                            # 	2 - Checar se a coluna "Situação" está com o status de "Enviado"
+                                            # 	3 - Checar se as colunas "Base de Cálculo" e "Valor INSS" da tabela "Valor INSS Sistema" coincidem com os valores da tabela "Valor INSS eSocial".
+                                            # 	4 - Esc
+                                            # 	5 - Esc
+
+                                        # TOOLBAR DO BOTÃO DE RELATÓRIOS
                                         window2.child_window(title="Relatórios", control_type="MenuItem").click_input(coords=(0,0, 1366,768))
                                         window2.child_window(title="e-Social", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
-                                        window2.child_window(title="Eventos periódicos", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+                                        window2.child_window(title="Demonstrativo de INSS Folha e INSS eSocial", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+                                        window.child_window(title="Competência:", class_name="Button", found_index=0).wait('visible', timeout=20).click_input(coords=(150,10, 1366,768))
+                                        pyautogui.hotkey('ctrl','v')
+                                        time.sleep(0.5)
+                                        window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(250,10, 1366,768))
+                                        pyautogui.hotkey('ctrl','v')
+                                        window.child_window(title="&OK", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                        # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
+                                        window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=120).click_input(coords=(0,0, 1366,768))
+
+                                        #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
+                                        app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=60, retry_interval=1)
+
+                                        salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
+
+                                        if salvar_relatorio.exists():
+                                            salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
+                                            pywinauto.keyboard.send_keys('{DOWN}')
+                                            pywinauto.keyboard.send_keys('{ENTER}')
+                                            salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                        window2.child_window(title="Área de Trabalho", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                        window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                        pyautogui.write("Dados INSS")
+                                        window2.child_window(title="Salvar", auto_id="1", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
 
                                         window = app.top_window()
-                                        window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(100,10, 1366,768))
-                                        pc.copy(data2)
-                                        pyautogui.hotkey('ctrl','v')
-                                        # 	1 - Clicar em "Fechamento dos Eventos Periódicos"
-                                        window.child_window(title="S-1299 - Fechamento dos Eventos Periódicos", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                        # 	2 - Clicar em "Enviar"
-                                        window.child_window(title="En&viar", class_name="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                        window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
 
-                                        try:
-                                            atencao_esocial = app.window(title_re="Atenção", class_name="#32770")
-                                            if atencao_esocial.exists():
-                                                atencao_esocial.child_window(title="&Sim", class_name="Button").wait('ready', timeout=60).click_input(coords=(0,0, 1366,768))
-                                        except:
-                                            pass
+                                        # ----- Verificação se os dados conferem através da planilha
+
+                                        data_atual = date.today()
+                                        month, year = (data_atual.month-1, data_atual.year) if data_atual.month != 1 else (12, data_atual.year-1)
+                                        data_atual = data_atual.replace(day=1, month=month, year=year)
+                                        competencia = data_atual.strftime('%d/%m/%Y')
+
+                                        tabela = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\Dados INSS.xls", engine='xlrd')
+
+                                        #SISTEMA
+                                        sistema_base = tabela.loc[tabela["competencia"]==competencia,"base_inss"]
+                                        sistema_val = tabela.loc[tabela["competencia"]==competencia,"valor_inss"]
+
+
+                                        # ------ ESOCIAL
+                                        esocial_base = tabela.loc[tabela["competencia"]==competencia, "cp_base_inss_esocial"]
+                                        esocial_val = tabela.loc[tabela["competencia"]==competencia, "cp_valor_calculado_inss_esocial"]
+
+                                        # ------ COMPARAÇÃO
+                                        base = (np.array_equal(sistema_base, esocial_base)) #compara se os dois arrays são iguais (base calculo sistema, base calculo esocial)
+                                        valor = (np.array_equal(sistema_val, esocial_val)) # valor inss (sistema), valor calculado inss (inss)
                                         
-                                        try:
-                                            window.child_window(title="En&viar", class_name="Button").wait_not('active', timeout=80)
-                                        except:
-                                            pass
-                                        
-                                        try:
-                                            avisos_esocial = app.window(title_re="Avisos eSocial", class_name="FNWNS3190").wait('visible', timeout=60)
-                                            if avisos_esocial.exists(): 
-                                                dlg.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                        except:
-                                            pass
-
-                                        #"OS EVENTOS PERIÓDICOS COM EXCEÇÃO DOS EVENTOS DE REMUNERAÇÃO E PAGAMENTOS DEVERÃO SER ENVIADOS PELA EMPRESA CENTRALIZADORA"
-                                        atencao_periodicos = app.window(title_re='Atenção', class_name='FNWNS3190')
-                                        try:
-                                            atencao_periodicos = app.window(title_re='Atenção', class_name='FNWNS3190').wait('visible', timeout=15)
-                                        except:
-                                            pass
-
-                                        if not atencao_periodicos.exists():
-
-                                            # 	3 - Ok
-                                            fechamentomsg = pyautogui.locateOnScreen('imagens/atencao_dctf.png', region=(0,0, 1366,768))
-                                            if fechamentomsg:
-                                                pyautogui.click(fechamentomsg)
-                                                pywinauto.keyboard.send_keys('{ENTER}')
-                                            
-                                            if enviado_sucesso.exists():
-                                                time.sleep(2)
-                                                dlg.child_window(title="OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
-
-                                                window.child_window(title="&Painel Pendências", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
-
-                                                # 	4 - Conferir no "Painel de Pendências" o status do processamento clicando em atualizar até sumir.
-                                                # se o evento ainda estiver sendo processado, identifique a imagem "fechamento" e clique em atualizar até q ela suma
-                                                while pyautogui.locateOnScreen('imagens/fechamento.png', region=(0,0, 1366,768)):
-                                                    try:
-                                                        window.child_window(title="&Atualizar", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
-                                                    except:
-                                                        pass
-                                                    time.sleep(1)
-
-                                                window.child_window(title="&Validados", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                # 	5 - Conferir na aba "Periódicos" se aparece "Fechamento" na coluna "Evento" (aqui será feito a filtragem do mês/ano do fechamento e o donwload da planilha para pesquisar por FECHAMENTO nela)
-                                                window.child_window(class_name="PBTabControl32_100", found_index=0).click_input(coords=(150,10, 1366,768))
-                                                window.child_window(title="&Filtrar", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                
-                                                dlg = app.window(title="Filtro de Eventos", class_name="FNWNS3190")
-                                                app.window(title="Filtro de Eventos", class_name="FNWNS3190").wait('visible', timeout=15)
-                                                time.sleep(1)
-                                                #recuperando o mês atual
-                                                pc.copy(data)
-                                                dlg.child_window(title="Período:", class_name="Button").double_click_input(coords=(70,8, 1366,768))
-                                                pyautogui.hotkey('ctrl','v')
-                                                time.sleep(1)
-                                                dlg.child_window(title="Período:", class_name="Button").double_click_input(coords=(170,8, 1366,768))
-                                                pyautogui.hotkey('ctrl','v')
-                                                dlg.child_window(title="&Ok", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                
-                                                window.child_window(title="&Relatório", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                
-                                                # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
-                                                window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=30).click_input(coords=(0,0, 1366,768))
-
-                                                #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
-                                                app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=30, retry_interval=1)
-
-                                                salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
-
-                                                if salvar_relatorio.exists():
-                                                    salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
-                                                    pywinauto.keyboard.send_keys('{DOWN}')
-                                                    pywinauto.keyboard.send_keys('{ENTER}')
-                                                    salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
-
-                                                window2.child_window(title="Área de Trabalho", control_type="Button").click_input(coords=(0,0, 1366,768))
-                                                window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").click_input(coords=(0,0, 1366,768))
-                                                pyautogui.write("RelatorioValidados")
-                                                window2.child_window(title="Salvar", auto_id="1", control_type="Button").click_input(coords=(0,0, 1366,768))
-                                                
-                                                window = app.top_window()
-                                                window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
-                                                
-                                                # verificação se os dados conferem através da planilha
-
-                                                tabela_validados = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\RelatorioValidados.xls", engine='xlrd')
-                                                
-                                                # data2 = date.today()
-                                                # data2 = data2.strftime(str("%d") + "/" + str("%m") + "/" + str("%Y"))
-
-                                                # tabela_3 = tabela_validados.loc[tabela_validados["data_conclusao"]==data2,"evento"]
-                                                #print(tabela_3)
-                                                
-                                                for coluna in tabela_validados.columns:
-                                                    fechamento_excel = tabela_validados["evento"]=="S-1299 Fechamento"
-                                                    
-                                                if fechamento_excel.any():
-                                                    procedimento = "Fechamento enviado com sucesso!"
-                                                    pyautogui.alert(text='Conferência realizada, o Fechamento foi enviado com sucesso!. ', title='Automatização eSocial', button='OK', timeout="10000")
-                                                    open_google()
-                                                    window = app.top_window()
-                                                    window.set_focus()
-                                                    
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    
-                                                else:
-
-                                                    procedimento = "Fechamento não enviado"
-                                                    
-                                                    open_google()
-
-                                                    alerta.show()
-                                                    pyautogui.alert(text='Alerta! O Fechamento não foi realizado.', title='Automatização eSocial', button='OK', timeout="15000")                       
-                                                    window = app.top_window()
-                                                    window.set_focus()
-
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-                                                    pywinauto.keyboard.send_keys('{ESC}')
-
-                                        else:
-                                            procedimento = "Aguardando o envio pela empresa centralizadora"
-
-                                            atencao_periodicos.child_window(title='Os eventos periódicos com exceção dos eventos de remuneração e pagamentos deverão ser enviados pela empresa centralizadora.', class_name='Edit').click_input(coords=(260,80, 1366,768))
-                                            alerta.show()
-                                            open_google()
-                                            window = app.top_window()
+                                        if base and valor:
+                                            pyautogui.alert(text=f'Conferência realizada, os valores do INSS da Empresa {cod} coincidem. ', title='Automatização eSocial', button='OK', timeout="15000")
+                                            window = app.FNWND3190
                                             window.set_focus()
                                             time.sleep(3)
+                                            pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
+                                            pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
+                                    
+                                            window2.child_window(title="Relatórios", control_type="MenuItem").click_input(coords=(0,0, 1366,768))
+                                            window2.child_window(title="e-Social", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+                                            window2.child_window(title="Demonstrativo de FGTS Folha e FGTS eSocial", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+
+                                            window = app.top_window()
+                                            window.child_window(title="Competência:", class_name="Button", found_index=0).wait('visible', timeout=20).click_input(coords=(150,10, 1366,768))
+                                            pc.copy(data2)
+                                            pyautogui.hotkey('ctrl','v')
+                                            time.sleep(0.5)
+                                            window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(250,10, 1366,768))
+                                            pyautogui.hotkey('ctrl','v')
+                                            window.child_window(title="&OK", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                            # ------ Verificar se os dados conferem através da planilha
+
+                                            # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
+                                            window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=120).click_input(coords=(0,0, 1366,768))
+
+                                            #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
+                                            app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=60, retry_interval=1)
+
+                                            salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
+
+                                            if salvar_relatorio.exists():
+                                                salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
+                                                pywinauto.keyboard.send_keys('{DOWN}')
+                                                pywinauto.keyboard.send_keys('{ENTER}')
+                                                salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                            window2.child_window(title="Área de Trabalho", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                            window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                            pyautogui.write("Dados FGTS")
+                                            window2.child_window(title="Salvar", auto_id="1", control_type="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+                                            
+                                            window = app.top_window()
+                                            window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                            # verificação se os dados conferem através da planilha
+
+                                            tabela_2 = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\Dados FGTS.xls", engine='xlrd') 
+                                            #C:\\Users\\Suporte\\Desktop\\
+
+                                            # SE A BASE_FGTS_DO_SISTEMA - BASE_DO_ESOCIAL FOR MENOR OU IGUAL A 20 CENTAVOS
+                                            calculo_fgts = (tabela_2.loc[tabela_2["competencia"]==competencia,"base_fgts"]-tabela_2.loc[tabela_2["competencia"]==competencia, "cp_base_fgts_esocial"])*(-1) <= 0.20
+                                            resultado_base = calculo_fgts.all()
+                                            # A FUNÇÃO .all() testa se todos os resultados são TRUE
+
+                                            calculo_valor = (tabela_2.loc[tabela_2["competencia"]==competencia, "valor_fgts"]-tabela_2.loc[tabela_2["competencia"]==competencia,"cp_valor_fgts_esocial"])*(-1) <= 0.20
+                                            resultado_valor = calculo_valor.all()
+
+                                            if resultado_base and resultado_valor:
+                                                #print("Ok, a diferença é menor que 0.20, pode continuar!!!!")
+                                                pyautogui.alert(text=f'Conferência realizada com sucesso!', title='Automatização eSocial', button='OK', timeout="15000")
+                                                window = app.FNWND3190
+                                                window.set_focus()
+                                                time.sleep(3)
+                                                pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
+                                                pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
+                                                # 5 - "Rotina" -> "Eventos Periódicos"
+                                                    
+                                                window2.child_window(title="Relatórios", control_type="MenuItem").click_input(coords=(0,0, 1366,768))
+                                                window2.child_window(title="e-Social", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+                                                window2.child_window(title="Eventos periódicos", control_type="MenuItem").wait('exists', timeout=15, retry_interval=1).click_input(coords=(0,0, 1366,768))
+
+                                                window = app.top_window()
+                                                window.child_window(title="Competência:", class_name="Button", found_index=0).click_input(coords=(100,10, 1366,768))
+                                                pc.copy(data2)
+                                                pyautogui.hotkey('ctrl','v')
+                                                # 	1 - Clicar em "Fechamento dos Eventos Periódicos"
+                                                window.child_window(title="S-1299 - Fechamento dos Eventos Periódicos", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                # 	2 - Clicar em "Enviar"
+                                                window.child_window(title="En&viar", class_name="Button").wait('ready', timeout=15).click_input(coords=(0,0, 1366,768))
+        
+                                                window.child_window(title="En&viar").wait('exists', timeout=500, retry_interval=2)
+
+                                                try:
+                                                    atencao_esocial = app.window(title_re="Atenção", class_name="#32770")
+                                                    app.window(title_re="Atenção", class_name="#32770")
+                                                    if atencao_esocial.exists():
+                                                        atencao_esocial.child_window(title="&Sim", class_name="Button").wait('ready', timeout=60).click_input(coords=(0,0, 1366,768))
+                                                except:
+                                                    pass
+                                                
+                                                try:
+                                                    avisos_esocial = app.window(title_re="Avisos eSocial", class_name="FNWNS3190")
+                                                    app.window(title_re="Avisos eSocial", class_name="FNWNS3190")
+                                                    if avisos_esocial.exists(): 
+                                                        dlg.child_window(title="&Sim", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                except:
+                                                    pass
+
+                                                #"OS EVENTOS PERIÓDICOS COM EXCEÇÃO DOS EVENTOS DE REMUNERAÇÃO E PAGAMENTOS DEVERÃO SER ENVIADOS PELA EMPRESA CENTRALIZADORA"
+                                                atencao_periodicos = app.window(title_re='Atenção', class_name='FNWNS3190')
+
+                                                if not atencao_periodicos.exists():
+
+                                                    # 	3 - Ok
+                                                    fechamentomsg = pyautogui.locateOnScreen('imagens/atencao_dctf.png', region=(0,0, 1366,768))
+                                                    if fechamentomsg:
+                                                        pyautogui.click(fechamentomsg)
+                                                        pywinauto.keyboard.send_keys('{ENTER}')
+                                                    
+                                                    if enviado_sucesso.exists():
+                                                        time.sleep(2)
+                                                        dlg.child_window(title="OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
+
+                                                        window.child_window(title="&Painel Pendências", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        window.child_window(class_name="PBTabControl32_100").click_input(coords=(550,10, 1366,768))
+
+                                                        # 	4 - Conferir no "Painel de Pendências" o status do processamento clicando em atualizar até sumir.
+                                                        # se o evento ainda estiver sendo processado, identifique a imagem "fechamento" e clique em atualizar até q ela suma
+                                                        while pyautogui.locateOnScreen('imagens/fechamento.png', region=(0,0, 1366,768)):
+                                                            try:
+                                                                window.child_window(title="&Atualizar", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
+                                                            except:
+                                                                pass
+                                                            time.sleep(1)
+
+                                                        window.child_window(title="&Validados", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        # 	5 - Conferir na aba "Periódicos" se aparece "Fechamento" na coluna "Evento" (aqui será feito a filtragem do mês/ano do fechamento e o donwload da planilha para pesquisar por FECHAMENTO nela)
+                                                        window.child_window(class_name="PBTabControl32_100", found_index=0).wait('visible', timeout=60).click_input(coords=(150,10, 1366,768))
+                                                        window.child_window(title="&Filtrar", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        
+                                                        dlg = app.window(title="Filtro de Eventos", class_name="FNWNS3190")
+                                                        app.window(title="Filtro de Eventos", class_name="FNWNS3190").wait('visible', timeout=15)
+                                                        time.sleep(1)
+                                                        #recuperando o mês atual
+                                                        pc.copy(data)
+                                                        dlg.child_window(title="Período:", class_name="Button").double_click_input(coords=(70,8, 1366,768))
+                                                        pyautogui.hotkey('ctrl','v')
+                                                        time.sleep(1)
+                                                        dlg.child_window(title="Período:", class_name="Button").double_click_input(coords=(170,8, 1366,768))
+                                                        pyautogui.hotkey('ctrl','v')
+                                                        dlg.child_window(title="&Ok", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        
+                                                        window.child_window(title="&Relatório", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        
+                                                        # ------ Salvar o demonstrativo em uma planilha excel em um local padrão, abrir com python e comparar as colunas
+                                                        window.child_window(title="none", class_name="FNUDO3190", found_index=4).wait('ready', timeout=30).click_input(coords=(0,0, 1366,768))
+
+                                                        #Espera 30seg até que a janela 'Salvar o relatório' seja verdadeira
+                                                        app.window(title_re = 'Salvar o Relatório').wait('visible', timeout=30, retry_interval=1)
+
+                                                        salvar_relatorio = app.window(title_re = 'Salvar o Relatório', class_name = 'FNWNS3190')
+
+                                                        if salvar_relatorio.exists():
+                                                            salvar_relatorio.child_window(title="Tipo:", class_name="Button").click_input(coords=(100,5, 1366,768))
+                                                            pywinauto.keyboard.send_keys('{DOWN}')
+                                                            pywinauto.keyboard.send_keys('{ENTER}')
+                                                            salvar_relatorio.child_window(title="...", class_name="Button").click_input(coords=(0,0, 1366,768))
+
+                                                        window2.child_window(title="Área de Trabalho", control_type="Button").click_input(coords=(0,0, 1366,768))
+                                                        window2.child_window(title="Nome:", auto_id="1148", control_type="Edit").click_input(coords=(0,0, 1366,768))
+                                                        pyautogui.write("RelatorioValidados")
+                                                        window2.child_window(title="Salvar", auto_id="1", control_type="Button").click_input(coords=(0,0, 1366,768))
+                                                        
+                                                        window = app.top_window()
+                                                        window.child_window(title="&Salvar", class_name="Button").click_input(coords=(0,0, 1366,768))
+                                                        
+                                                        # verificação se os dados conferem através da planilha
+
+                                                        tabela_validados = pd.read_excel(f"C:\\Users\\{usuario}\\Desktop\\RelatorioValidados.xls", engine='xlrd')
+                                                        
+                                                        # data2 = date.today()
+                                                        # data2 = data2.strftime(str("%d") + "/" + str("%m") + "/" + str("%Y"))
+
+                                                        # tabela_3 = tabela_validados.loc[tabela_validados["data_conclusao"]==data2,"evento"]
+                                                        #print(tabela_3)
+                                                        
+                                                        for coluna in tabela_validados.columns:
+                                                            fechamento_excel = tabela_validados["evento"]=="S-1299 Fechamento"
+                                                            
+                                                        if fechamento_excel.any():
+                                                            procedimento = "Fechamento enviado com sucesso!"
+                                                            pyautogui.alert(text='Conferência realizada, o Fechamento foi enviado com sucesso!. ', title='Automatização eSocial', button='OK', timeout="10000")
+                                                            open_google()
+                                                            window = app.top_window()
+                                                            window.set_focus()
+                                                            
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            
+                                                        else:
+
+                                                            procedimento = "Fechamento não enviado"
+                                                            
+                                                            open_google()
+
+                                                            alerta.show()
+                                                            pyautogui.alert(text='Alerta! O Fechamento não foi realizado.', title='Automatização eSocial', button='OK', timeout="15000")                       
+                                                            window = app.top_window()
+                                                            window.set_focus()
+
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+                                                            pywinauto.keyboard.send_keys('{ESC}')
+
+                                                else:
+                                                    procedimento = "Aguardando o envio pela empresa centralizadora"
+
+                                                    atencao_periodicos.child_window(title='Os eventos periódicos com exceção dos eventos de remuneração e pagamentos deverão ser enviados pela empresa centralizadora.', class_name='Edit').click_input(coords=(260,80, 1366,768))
+                                                    alerta.show()
+                                                    open_google()
+                                                    window = app.top_window()
+                                                    window.set_focus()
+                                                    time.sleep(3)
+                                                    pywinauto.keyboard.send_keys('{ESC}')
+                                                    pywinauto.keyboard.send_keys('{ESC}')
+                                                    pywinauto.keyboard.send_keys('{ESC}')
+                                                # 6 - Ir em "Controle" -> "Empresas" e copiar o CNPJ da empresa (para inserir no site do ecac)
+                                                
+                                            else:
+                                                #print("Valor maior que R$0,20 centavos")
+                                                # sairDominio()
+                                                procedimento = "FGTS"
+                                                
+                                                # exibindo notificação de ALERTA
+                                                mensagem.show()
+                                                
+                                                open_google()
+                                                window = app.top_window()
+                                                window.set_focus()
+                                                time.sleep(3)
+                                                pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
+                                                pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
+                                    
+                                        else:
+                                            #print("Erro: OS DADOS NÃO CONFEREM")
+                                            # sairDominio()
+                                            procedimento = "INSS"
+                                            
+                                            # exibindo notificação de ALERTA
+                                            mensagem.show()
+
+                                            open_google()
+
+                                            time.sleep(3)
+                                            window = app.top_window()
+                                            window.set_focus()
                                             pywinauto.keyboard.send_keys('{ESC}')
                                             pywinauto.keyboard.send_keys('{ESC}')
-                                            pywinauto.keyboard.send_keys('{ESC}')
-                                        # 6 - Ir em "Controle" -> "Empresas" e copiar o CNPJ da empresa (para inserir no site do ecac)
-                                        
+                                
                                     else:
-                                        #print("Valor maior que R$0,20 centavos")
+                                        #print("Erro: Possui evento invalidado")
                                         # sairDominio()
-                                        procedimento = "FGTS"
+                                        procedimento = "Evento Invalidado no Painel de Pendências"
                                         
                                         # exibindo notificação de ALERTA
                                         mensagem.show()
-                                        
+
                                         open_google()
+
+                                        time.sleep(3)
                                         window = app.top_window()
                                         window.set_focus()
-                                        time.sleep(3)
-                                        pywinauto.keyboard.send_keys('{ESC}') #saindo do painel de inss
-                                        pywinauto.keyboard.send_keys('{ESC}') # fechar a tela de competencia
-                            
-                                else:
-                                    #print("Erro: OS DADOS NÃO CONFEREM")
-                                    # sairDominio()
-                                    procedimento = "INSS"
-                                    
-                                    # exibindo notificação de ALERTA
-                                    mensagem.show()
+                                        pywinauto.keyboard.send_keys('{ESC}')
+                                        pywinauto.keyboard.send_keys('{ESC}')  
 
-                                    open_google()
+                            else:
+                                procedimento = "Competencia fechada no eSocial"
 
-                                    time.sleep(3)
-                                    window = app.top_window()
-                                    window.set_focus()
-                                    pywinauto.keyboard.send_keys('{ESC}')
-                                    pywinauto.keyboard.send_keys('{ESC}')
-                        
+                                try:
+                                    dlg.child_window(title="&OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
+                                except:
+                                    pass
+
+                                open_google()
+                                
+                                alerta.show()
+
+                                time.sleep(3)
+                                window = app.top_window()
+                                window.set_focus()
+                                pywinauto.keyboard.send_keys('{ESC}')
+                                pywinauto.keyboard.send_keys('{ESC}')
+
                         else:
-                            procedimento = "Competencia fechada no eSocial"
+                            procedimento = "Não existem pagamentos nesta competência."
 
                             try:
-                                dlg.child_window(title="&OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
+                                dlg.child_window(title_re='Não existem pagamentos nesta competência para envio.', class_name='Static').click_input(coords=(230,55, 1366,768))
                             except:
                                 pass
-
+                                                
                             open_google()
                             
                             alerta.show()
-
                             time.sleep(3)
                             window = app.top_window()
                             window.set_focus()
                             pywinauto.keyboard.send_keys('{ESC}')
                             pywinauto.keyboard.send_keys('{ESC}')
+                            pywinauto.keyboard.send_keys('{ESC}')
 
                     else:
-                        procedimento = "Não existem pagamentos nesta competência."
+                        procedimento = "Não existem cálculos nesta competência."
 
                         try:
-                            dlg.child_window(title_re='Não existem pagamentos nesta competência para envio.', class_name='Static').click_input(coords=(230,55, 1366,768))
+                            dlg.child_window(title_re='Não existem cálculos nesta competência para envio.', class_name='Static').wait('visible', timeout=3).click_input(coords=(230,55, 1366,768))
                         except:
                             pass
-                                            
+                                
                         open_google()
                         
                         alerta.show()
@@ -647,13 +709,13 @@ def startParametrizacao():
                         window.set_focus()
                         pywinauto.keyboard.send_keys('{ESC}')
                         pywinauto.keyboard.send_keys('{ESC}')
-                        pywinauto.keyboard.send_keys('{ESC}')
 
                 else:
-                    procedimento = "Não existem cálculos nesta competência."
+                    procedimento = "Rubrica Invalidada."
 
                     try:
-                        dlg.child_window(title_re='Não existem cálculos nesta competência para envio.', class_name='Static').wait('visible', timeout=3).click_input(coords=(230,55, 1366,768))
+                        dlg = app.window(title='Avisos Rubricas')
+                        dlg.child_window(title="&Fechar", class_name="Button", found_index=0).wait('visible', timeout=15).click_input(coords=(0,0, 1366,768))
                     except:
                         pass
                             
@@ -664,7 +726,8 @@ def startParametrizacao():
                     window = app.top_window()
                     window.set_focus()
                     pywinauto.keyboard.send_keys('{ESC}')
-                    pywinauto.keyboard.send_keys('{ESC}')
+                    pywinauto.keyboard.send_keys('{ESC}')  
+                    
 
             else:
                 acesso.child_window(title="OK", class_name="Button", found_index=0).click_input(coords=(0,0, 1366,768))
